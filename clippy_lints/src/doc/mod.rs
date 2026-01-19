@@ -15,7 +15,7 @@ use rustc_resolve::rustdoc::pulldown_cmark::Event::{
 use rustc_resolve::rustdoc::pulldown_cmark::Tag::{
     BlockQuote, CodeBlock, FootnoteDefinition, Heading, Item, Link, Paragraph,
 };
-use rustc_resolve::rustdoc::pulldown_cmark::{BrokenLink, CodeBlockKind, CowStr, Options, TagEnd};
+use rustc_resolve::rustdoc::pulldown_cmark::{BrokenLink, CodeBlockKind, CowStr, Options, TagEnd, LinkType};
 use rustc_resolve::rustdoc::{
     DocFragment, add_doc_fragment, attrs_to_doc_fragments, main_body_opts, pulldown_cmark,
     source_span_for_markdown_range, span_of_fragments,
@@ -698,6 +698,28 @@ declare_clippy_lint! {
     "missing terminal punctuation in doc comments"
 }
 
+declare_clippy_lint! {
+    /// ### What it does
+    /// Checks for links with code directly adjacent to code text:
+    /// `` [`MyItem`]`<`[`u32`]`>` ``.
+    ///
+    /// ### Why is this bad?
+    /// It can be written more simply using HTML-style `<code>` tags.
+    ///
+    /// ### Example
+    /// ```no_run
+    /// //! [`first`](x)`second`
+    /// ```
+    /// Use instead:
+    /// ```no_run
+    /// //! <code>[first](x)second</code>
+    /// ```
+    #[clippy::version = "1.93.0"]
+    pub DOC_LINK_REFERENCE,
+    suspicious,
+    "link with code back-to-back with other code"
+}
+
 pub struct Documentation {
     valid_idents: FxHashSet<String>,
     check_private_items: bool,
@@ -733,6 +755,7 @@ impl_lint_pass!(Documentation => [
     DOC_COMMENT_DOUBLE_SPACE_LINEBREAKS,
     DOC_SUSPICIOUS_FOOTNOTES,
     DOC_PARAGRAPHS_MISSING_PUNCTUATION,
+    DOC_LINK_REFERENCE,
 ]);
 
 impl EarlyLintPass for Documentation {
@@ -1094,6 +1117,7 @@ fn check_doc<'a, Events: Iterator<Item = (pulldown_cmark::Event<'a>, Range<usize
     let mut blockquote_level = 0;
     let mut collected_breaks: Vec<Span> = Vec::new();
     let mut is_first_paragraph = true;
+    let mut code_includes_broken_ref = false;
 
     let mut containers = Vec::new();
 
@@ -1152,6 +1176,73 @@ fn check_doc<'a, Events: Iterator<Item = (pulldown_cmark::Event<'a>, Range<usize
                 });
             },
             End(TagEnd::CodeBlock) => code = None,
+            Start(Link { link_type: LinkType::ReferenceUnknown, .. }) => {
+                code_includes_broken_ref = true;
+            }
+            Start(Link { link_type: LinkType::Inline, dest_url, .. }) => {
+                if code_includes_broken_ref {
+                    let start = range.start;
+
+                    while let Some((event, end_range)) = events.next() {
+                        println!("{:?}", event);
+                        if matches!(event, End(TagEnd::Link)) {
+                            // let full_range = start..end_range.end;
+                            println!("{:?}", &doc[start..end_range.end]);
+                            if let Some(label) = extract_link_text(doc, start..end_range.end)
+                                // && used_reference_links.contains(&label)
+                                && let Some(span) = fragments.span(cx, start..end_range.end)
+                            {
+                                span_lint_and_then(
+                                    cx,
+                                    DOC_LINK_REFERENCE,
+                                    span,
+                                    "reference-style link used with inline link definition",
+                                    |diag| {
+                                        diag.span_suggestion_short(
+                                            span,
+                                            "for an intra-doc link, add `[]` between the label and the colon",
+                                            "[]",
+                                            Applicability::MaybeIncorrect,
+                                        );
+                                        diag.help("link definitions are not shown in rendered documentation");
+                                    }
+                                );
+                            }
+                            break;
+                        }
+                    }
+                    // if let Some((next_event, next_range)) = events.peek() {
+                    //     let next_start = match next_event {
+                    //         End(TagEnd::Link) => next_range.end,
+                    //         _ => next_range.start,
+                    //     };
+
+                    //     println!("{:?}", &doc[start..next_start]);
+
+                    //     if let Some(label) = extract_link_text(doc, range.start..next_start)
+                    //         // && used_reference_links.contains(&label)
+                    //         && let Some(span) = fragments.span(cx, range.start..next_start)
+                    //     {
+                    //         span_lint_and_then(
+                    //             cx,
+                    //             DOC_LINK_REFERENCE,
+                    //             span,
+                    //             "reference-style link used with inline link definition",
+                    //             |diag| {
+                    //                 diag.span_suggestion_short(
+                    //                     span,
+                    //                     "for an intra-doc link, add `[]` between the label and the colon",
+                    //                     "[]",
+                    //                     Applicability::MaybeIncorrect,
+                    //                 );
+                    //                 diag.help("link definitions are not shown in rendered documentation");
+                    //             }
+                    //         );
+                    //     }
+                    // }
+                }
+                in_link = Some(dest_url);
+            },
             Start(Link { dest_url, .. }) => in_link = Some(dest_url),
             End(TagEnd::Link) => in_link = None,
             Start(Heading { .. } | Paragraph | Item) => {
@@ -1315,6 +1406,18 @@ fn check_doc<'a, Events: Iterator<Item = (pulldown_cmark::Event<'a>, Range<usize
     doc_comment_double_space_linebreaks::check(cx, &collected_breaks);
 
     headers
+}
+
+fn extract_link_text(doc: &str, range: Range<usize>) -> Option<String> {
+    let s = doc.get(range)?;
+    let start = s.find('[')? + 1;
+    println!("{:?}", start);
+    return Some("".to_string());
+    let end = s[start..].find(']')? + start;
+    println!("test");
+    let test = Some(s[start..end].to_string());
+    println!("{:?}", test.clone().unwrap());
+    test
 }
 
 fn looks_like_refdef(doc: &str, range: Range<usize>) -> Option<Range<usize>> {

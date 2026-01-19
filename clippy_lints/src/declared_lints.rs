@@ -115,6 +115,7 @@ pub static LINTS: &[&::declare_clippy_lint::LintInfo] = &[
     crate::doc::DOC_INCLUDE_WITHOUT_CFG_INFO,
     crate::doc::DOC_LAZY_CONTINUATION_INFO,
     crate::doc::DOC_LINK_CODE_INFO,
+    crate::doc::DOC_LINK_REFERENCE_INFO,
     crate::doc::DOC_LINK_WITH_QUOTES_INFO,
     crate::doc::DOC_MARKDOWN_INFO,
     crate::doc::DOC_NESTED_REFDEFS_INFO,

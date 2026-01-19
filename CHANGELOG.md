@@ -6387,6 +6387,7 @@ Released 2018-09-13
 [`doc_include_without_cfg`]: https://rust-lang.github.io/rust-clippy/master/index.html#doc_include_without_cfg
 [`doc_lazy_continuation`]: https://rust-lang.github.io/rust-clippy/master/index.html#doc_lazy_continuation
 [`doc_link_code`]: https://rust-lang.github.io/rust-clippy/master/index.html#doc_link_code
+[`doc_link_reference`]: https://rust-lang.github.io/rust-clippy/master/index.html#doc_link_reference
 [`doc_link_with_quotes`]: https://rust-lang.github.io/rust-clippy/master/index.html#doc_link_with_quotes
 [`doc_markdown`]: https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
 [`doc_nested_refdefs`]: https://rust-lang.github.io/rust-clippy/master/index.html#doc_nested_refdefs
